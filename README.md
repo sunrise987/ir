@@ -1,4 +1,4 @@
 ir
 ==
 
-Code for my IR class
+Code for my IR class.
