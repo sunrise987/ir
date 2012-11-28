@@ -13,7 +13,9 @@ import (
     "log"
     "bufio"
     "strings"
-	. "sortmap"
+    . "sortmap"
+//    . "precrecal"
+  
 )
 
 const APP_VERSION = "0.1"
@@ -23,23 +25,23 @@ var orFlag *bool = flag.Bool("or", false, "Embed 'or' within each query.")
 
 var tenFlag *bool = flag.Bool("ten", false, "Print only 10 results.")
 
+/**/
 func main() {
-/*
+
+	// Make reversed index:
 	//root := "../"
 	root := ""
 	corpus := root + "data/IR_Project1_Documents/*.txt"
 	stopwords := root + "data/stopwords.txt"
-    index := RunMakeReverseIndex(corpus, stopwords)
+        index := RunMakeReverseIndex(corpus, stopwords)
 
-	
 	
 	//runOnline(index)	
 	runOffline_receivesFolder(index, root + "data/IR_Project2_Queries/*")
-	*/
-	
-	readCorrectAnswersToMap("data/RelevancyLists.txt")
+
 }
 
+/**/
 func RunMakeReverseIndex(corpus, stopwords string) *Index {
 	flag.Parse() // Scan the arguments list
    	
@@ -94,44 +96,48 @@ func runOnline_receivesQueryText(index *Index) {
 }
 
 func runOffline_receivesFolder(index *Index, address string) {
-	fileNames, err := filepath.Glob(address)
+	QueryFiles, err := filepath.Glob(address)
+	fmt.Printf("%d queries to process.\n", len(QueryFiles))
 	if err != nil {log.Fatal(err)}
-	
 	//os.Remove("data/BasicResults.txt")
 	//resultFile, e := os.Create("data/BasicResults.txt")
 	//if e != nil {log.Fatal(e)
-	
-	fmt.Printf("%d queries processed.\n", len(fileNames))
-	
-	for _, fileName := range fileNames{
-		fmt.Println()
-		fmt.Println(fileName)		
-		_, data := ReadFile(fileName)		
-		lowcaseline := strings.ToLower(string(data))
-    	tokens := strings.Split(lowcaseline, " ")
-    	tokens = addANDS(tokens)
 
-       	docList := index.Query(tokens)    	
+	cutValue := 1 // To delete scores below 1
+	tokens := make([]string, 50) // TODO: fix this: assuming max query size 50 
+	var pairlist PairList
+
+	for _, queryFileName := range QueryFiles{
+		tokens = getTokensFromFile(queryFileName) 
+    		tokens = addANDS(tokens)
+       		docList := index.Query(tokens)    	
+
+		if *tenFlag {
+			pairlist = SortMapByValue_topTen(docList, cutValue)
+		} else {
+			pairlist = SortMapByValue(docList, cutValue)
+		}
+		
+//		MakePrecRecal(pairlist)
+
+		// Print top search results:
+		fmt.Println()
+		fmt.Println(queryFileName)		
 		fmt.Printf("Number of matches: %d\n\n", len(docList))
 		fmt.Printf("DocName\tScore\n")
-		pairlist := SortMapByValue(docList)
-		counter := 0
-		for _, pair := range pairlist {
-			if pair.Value >= 1 {
-			 	if *tenFlag {
-			 		if counter <= 10{
-						fmt.Printf("%s\t%.2f\n", pair.Key, pair.Value)
-					}
-				} else {
-					fmt.Printf("%s\t%.2f\n", pair.Key, pair.Value)
-				}
-			}
-			counter++
-		}
+		pairlist.Print()
 		fmt.Println()
-										
 	}
 }
+
+func getTokensFromFile(fileName string) []string{
+	_, data := ReadFile(fileName)		
+	lowcaseline := strings.ToLower(string(data))
+    	tokens := strings.Split(lowcaseline, " ")
+
+	return tokens
+}
+
 
 func addANDS(tokens []string) []string {
 	op := "or"
@@ -149,24 +155,3 @@ func addANDS(tokens []string) []string {
 	}
 	return newTokens
 }
-
-func readCorrectAnswersToMap(file string) map[string][]string {
-	correctAnswers := make(map[string][]string)
-	_, data := ReadFile(file)
-	lines := strings.Split(string(data), "\r\n")
-	
-	
-	for _, line := range lines {
-		tokens := strings.Split(line, " ")
-		if tokens != nil {
-			fmt.Println(tokens)
-		}
-		correctAnswers[tokens[0]] = tokens[1:len(tokens)]		
-	}
-	//fmt.Println("\n\n\n -----------------")
-	//fmt.Println(correctAnswers)
-	//fmt.Println("\n\n\n -----------------")
-	return correctAnswers
-}
-
-
