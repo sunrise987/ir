@@ -24,29 +24,27 @@ func (prGraph *PRGraph) init(fileName string) {
 	//fmt.Println(len(prGraph.testSample))
 }
 
-func (prGraph *PRGraph) MakePrecRecalTable(retrievedList sortmap.PairList, testData map[string]bool) {
+func (prGraph *PRGraph) MakePrecRecalTable(retrievedList sortmap.PairList, testData map[string]bool) ([]float64, []float64, int) {
 	totalExpected := float64(len(testData))
+	precision := make([]float64, len(retrievedList))
+	recall := make([]float64, len(retrievedList))
+	correctCount := 0.0
+	/*
 	fmt.Printf("retrieved: %v, expected: %v\n", len(retrievedList), totalExpected)
 	fmt.Println("Test Data:")
 	for n := range testData {
 		fmt.Printf("%v\n", n)
 	}
 	fmt.Printf("----\n")
+	 */
+	var num int
+	var pair sortmap.Pair
+	for num, pair = range retrievedList {
 
-	recall := make([]float64, len(retrievedList))
-	precision := make([]float64, len(retrievedList))
-	interpolatedPR := make([]float64, 11)
-	currentRecall := 0.0
-	maxPrecision := 0.0
-	correctCount := 0.0
-	j:=0
-
-	for num, pair := range retrievedList {
 		// No need to continue because all correct results were already	displayed.
 		if len(testData) == 0 {	break }
 
 		// Calculate Precision-Recall Table:
-		fmt.Println(pair.Key)
 		if testData[pair.Key] {
 			correctCount++
 			// Delete to keep track of when no more correct resluts are left.
@@ -54,29 +52,67 @@ func (prGraph *PRGraph) MakePrecRecalTable(retrievedList sortmap.PairList, testD
 		}
 		recall[num] = correctCount/totalExpected
 		precision[num] = correctCount/float64(num+1) // num retrieved sofar.
+		fmt.Println(pair.Key)
 		fmt.Printf("recall: %.2f,\tPrecision: %.2f\n", recall[num], precision[num])
-
-		// Calculate Interpolated Table
-		if precision[num] > maxPrecision {
-			maxPrecision = precision[num]
-		}
-		if recall[num] != currentRecall { // start a new period 
-			// Save this Period:
-			for ; j <= int(currentRecall*10) && j < 11 ; j++ {
-				interpolatedPR[j] = maxPrecision
-			}
-			maxPrecision = 0.0
-			currentRecall = recall[num]
-		}
 	}
-	fmt.Printf("recall tablesize: %v\n", len(recall))
-	fmt.Printf("precision tablesize: %v\n", len(precision))
-	fmt.Println("\n\nPrinting Interpolated Table:")
-	for j=0; j < 11 ; j++ {
-		fmt.Printf("%.2f:%.2f\n", float64(j)/10, interpolatedPR[j])
-	}
+	return precision, recall, num
 }
 
+func MakeInterpolatedPRTable(precision, recall []float64, numRetrievals int) {
+	numBins := 11
+	interpolatedPR := make([]float64, numBins)
+	periods := make([]float64, numBins)
+	currentRecall := 0.0
+	maxPrecision := 0.0
+
+	fmt.Printf("num retrievals: %d\n", numRetrievals)
+	for num := 0 ; num < numRetrievals ; num++ { 
+		// Find max precision for this period.
+		if maxPrecision < precision[num] {
+			maxPrecision = precision[num]
+		}
+		// Do not split on zero.
+		if currentRecall  == 0.0 {
+			currentRecall =recall[num]
+		}
+		// Split a new period.
+		if currentRecall != recall[num] {
+			// Save this period.
+			periods[int(currentRecall*10)] = maxPrecision
+			// Restart counting for the next period.
+			maxPrecision = precision[num]
+			currentRecall = recall[num]
+
+			// Don't forget the last period.
+				if num == (numRetrievals-1) {
+				periods[int(currentRecall*10)] = maxPrecision
+			}
+		}
+	}
+	max := 0.0
+	for i := (numBins - 1) ; i >= 0 ; i-- {
+		if periods[i] != 0.0 {
+			max = periods[i]
+		}
+		interpolatedPR[i] = max
+	}
+	fmt.Println("\nPrinting Interpolated Table:")
+	for j:=0; j < numBins ; j++ {
+//		fmt.Printf("%.1f  %.2f\n", float64(j)/10, periods[j])
+		fmt.Printf("%.1f  %.2f\n", float64(j)/10, interpolatedPR[j])
+	}
+
+}
+
+/**
+ junk:
+ for ; index < numBins && float64(index) < (currentRecall*10) ; index++ {
+ interpolatedPR[index] = maxPrecision
+ fmt.Printf("maxPrecision: %v\n", maxPrecision)
+ fmt.Printf("index:%v\n", float64(index))
+ fmt.Printf("currentRecall:%v\n", currentRecall)
+ } 
+*/
 func readTestSampleToMap(file string) map[string]map[string]bool {
 	testSample := make(map[string]map[string]bool)
 	data, _ := ioutil.ReadFile(file)
@@ -114,10 +150,44 @@ func readTestSampleToMap(file string) map[string]map[string]bool {
  * change package name to main.*/
 func main() {
 	prg := NewPRGraph()
-	list := make(sortmap.PairList, 3)
-	list[0] = sortmap.Pair{"326", 11.53}  
-	list[1] = sortmap.Pair{"304", 9.30}  
-	list[2] = sortmap.Pair{"308", 9.26}  
-	prg.MakePrecRecalTable(list, prg.testSample["1"])
+	
+	// Test 1
+	list := make(sortmap.PairList, 10)
+	list[0] = sortmap.Pair{"2", 11.53}  
+	list[1] = sortmap.Pair{"3", 9.30}  
+	list[2] = sortmap.Pair{"8", 9.26}  
+	list[3] = sortmap.Pair{"7", 5.26}  
+	list[4] = sortmap.Pair{"9", 2.26}  
+	list[5] = sortmap.Pair{"1", 1.26}  
+	list[6] = sortmap.Pair{"20", 1.26}  
+	list[7] = sortmap.Pair{"19", 1.26}  
 
+	testData := make(map[string]bool, 2)
+	testData["1"] = true
+	testData["3"] = true
+	precision, recall, size := prg.MakePrecRecalTable(list, testData)
+	MakeInterpolatedPRTable(precision, recall, size)
+
+
+	// Test 2
+	list = make(sortmap.PairList, 10)
+	list[0] = sortmap.Pair{"3", 11.53}  
+	list[1] = sortmap.Pair{"2", 9.30}  
+	list[2] = sortmap.Pair{"5", 9.26}  
+	list[3] = sortmap.Pair{"7", 5.26}  
+	list[4] = sortmap.Pair{"4", 2.26}  
+	list[5] = sortmap.Pair{"90", 1.26}  
+	list[6] = sortmap.Pair{"20", 1.26}  
+	list[7] = sortmap.Pair{"19", 1.26}  
+
+	testData = make(map[string]bool, 3)
+	testData["2"] = true
+	testData["3"] = true
+	testData["4"] = true
+	precision, recall, size = prg.MakePrecRecalTable(list, testData)
+	MakeInterpolatedPRTable(precision, recall, size)
+
+
+	//precision, recall := prg.MakePrecRecalTable(list, prg.testSample["1"])
 }
+ 
