@@ -1,5 +1,5 @@
-package main
-//package precrecal
+//package main
+package precrecal
 
 import (
 	"fmt"
@@ -19,12 +19,36 @@ func NewPRGraph() *PRGraph {
 	return prGraph
 }
 
+func NewPRGraph___forTesting() *PRGraph {
+	prGraph := &PRGraph{}
+	prGraph.testSample = readTestSampleToMap___forTesting()
+	return prGraph
+}
+
 func (prGraph *PRGraph) init(fileName string) {
 	prGraph.testSample = readTestSampleToMap(fileName)
 	//fmt.Println(len(prGraph.testSample))
 }
 
-func (prGraph *PRGraph) MakePrecRecalTable(retrievedList sortmap.PairList, testData map[string]bool) ([]float64, []float64, int) {
+func (prGraph *PRGraph) MakeAvgIntplPRTable(retrievedLists map[string]sortmap.PairList) {
+	numBins := 11
+	avgIntrplPRTable := make([]float64, numBins)
+	sampleSize := len(prGraph.testSample)
+	
+	for sample := range prGraph.testSample {
+		precision, recall, size :=makePrecRecallTable(retrievedLists[sample], prGraph.testSample[sample])
+		intrplPRTable := makeInterpolatedPRTable(precision, recall, size, numBins)
+		for i := 0 ; i < numBins ; i++ {
+			avgIntrplPRTable[i] += intrplPRTable[i]/float64(sampleSize)
+		}
+	}
+	fmt.Println("\nAvg. Interpolated PR Table:\n")
+	for j:=0 ; j < numBins ; j++ {
+		fmt.Printf("%.2f  %.2f\n", float64(j)/10, avgIntrplPRTable[j])
+	}
+}
+
+func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]bool) ([]float64, []float64, int) {
 	totalExpected := float64(len(testData))
 	precision := make([]float64, len(retrievedList))
 	recall := make([]float64, len(retrievedList))
@@ -58,8 +82,8 @@ func (prGraph *PRGraph) MakePrecRecalTable(retrievedList sortmap.PairList, testD
 	return precision, recall, num
 }
 
-func MakeInterpolatedPRTable(precision, recall []float64, numRetrievals int) {
-	numBins := 11
+func makeInterpolatedPRTable(precision, recall []float64, numRetrievals int, numBins int) []float64 {
+
 	interpolatedPR := make([]float64, numBins)
 	periods := make([]float64, numBins)
 	currentRecall := 0.0
@@ -101,18 +125,10 @@ func MakeInterpolatedPRTable(precision, recall []float64, numRetrievals int) {
 //		fmt.Printf("%.1f  %.2f\n", float64(j)/10, periods[j])
 		fmt.Printf("%.1f  %.2f\n", float64(j)/10, interpolatedPR[j])
 	}
-
+	return interpolatedPR
 }
 
-/**
- junk:
- for ; index < numBins && float64(index) < (currentRecall*10) ; index++ {
- interpolatedPR[index] = maxPrecision
- fmt.Printf("maxPrecision: %v\n", maxPrecision)
- fmt.Printf("index:%v\n", float64(index))
- fmt.Printf("currentRecall:%v\n", currentRecall)
- } 
-*/
+
 func readTestSampleToMap(file string) map[string]map[string]bool {
 	testSample := make(map[string]map[string]bool)
 	data, _ := ioutil.ReadFile(file)
@@ -146,11 +162,23 @@ func readTestSampleToMap(file string) map[string]map[string]bool {
 	return testSample
 }
 
-/* For Testing purposes. Note: to run main func, 
- * change package name to main.*/
-func main() {
-	prg := NewPRGraph()
+func readTestSampleToMap___forTesting() map[string]map[string]bool {
+	testData := make(map[string]bool, 2)
+	testData["1"] = true
+	testData["3"] = true
+	testData2 := make(map[string]bool, 3)
+	testData2["2"] = true
+	testData2["3"] = true
+	testData2["4"] = true
 	
+	testDataSet := map[string]map[string]bool {"100":testData, "200":testData2}
+	return testDataSet
+}
+
+
+func main() {
+	/* Note: for Testing purposes: Change package name to main.*/
+
 	// Test 1
 	list := make(sortmap.PairList, 10)
 	list[0] = sortmap.Pair{"2", 11.53}  
@@ -165,29 +193,30 @@ func main() {
 	testData := make(map[string]bool, 2)
 	testData["1"] = true
 	testData["3"] = true
-	precision, recall, size := prg.MakePrecRecalTable(list, testData)
-	MakeInterpolatedPRTable(precision, recall, size)
 
 
 	// Test 2
-	list = make(sortmap.PairList, 10)
-	list[0] = sortmap.Pair{"3", 11.53}  
-	list[1] = sortmap.Pair{"2", 9.30}  
-	list[2] = sortmap.Pair{"5", 9.26}  
-	list[3] = sortmap.Pair{"7", 5.26}  
-	list[4] = sortmap.Pair{"4", 2.26}  
-	list[5] = sortmap.Pair{"90", 1.26}  
-	list[6] = sortmap.Pair{"20", 1.26}  
-	list[7] = sortmap.Pair{"19", 1.26}  
+	list2 := make(sortmap.PairList, 10)
+	list2[0] = sortmap.Pair{"3", 11.53}  
+	list2[1] = sortmap.Pair{"2", 9.30}  
+	list2[2] = sortmap.Pair{"5", 9.26}  
+	list2[3] = sortmap.Pair{"7", 5.26}  
+	list2[4] = sortmap.Pair{"4", 2.26}  
+	list2[5] = sortmap.Pair{"90", 1.26}  
+	list2[6] = sortmap.Pair{"20", 1.26}  
+	list2[7] = sortmap.Pair{"19", 1.26}  
 
-	testData = make(map[string]bool, 3)
-	testData["2"] = true
-	testData["3"] = true
-	testData["4"] = true
-	precision, recall, size = prg.MakePrecRecalTable(list, testData)
-	MakeInterpolatedPRTable(precision, recall, size)
+	testData2 := make(map[string]bool, 3)
+	testData2["2"] = true
+	testData2["3"] = true
+	testData2["4"] = true
 
+	//numBins := 11
+	//precision, recall, size := makePrecRecallTable(list, testData)
+	//makeInterpolatedPRTable(precision, recall, size, numBins)
 
-	//precision, recall := prg.MakePrecRecalTable(list, prg.testSample["1"])
+	prg := NewPRGraph___forTesting()
+	retrievedLists := map[string]sortmap.PairList {"100":list, "200":list2}
+	prg.MakeAvgIntplPRTable(retrievedLists)
 }
- 
+
