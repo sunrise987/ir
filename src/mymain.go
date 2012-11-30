@@ -14,7 +14,7 @@ import (
     "bufio"
     "strings"
     . "sortmap"
-//    . "precrecal"
+    . "precrecal"
   
 )
 
@@ -59,13 +59,24 @@ func RunMakeReverseIndex(corpus, stopwords string) *Index {
 	for _, fileName := range fileNames{	
 		count, data := ReadFile(fileName)
 		
-		fileName = path.Base(fileName)
-		fileName = fileName[3:len(fileName)-4]
+		queryNum := getQueryNumberFromFileName(fileName)
 		//fmt.Println(fileName)		
-		index.MakeReverseIndex(count, data, fileName)
+		index.MakeReverseIndex(count, data, queryNum)
 	}
 	index.PrintStatistics()	
 	return index
+}
+
+func getQueryNumberFromFileName(fileName string) string {
+	fileName = path.Base(fileName)
+	queryNum := fileName[3:len(fileName)-4]
+	return queryNum
+}
+
+func getQueryNumberFromQueryFileName(fileName string) string {
+	fileName = path.Base(fileName)
+	queryNum := fileName[1:len(fileName)]
+	return queryNum
 }
 
 /**
@@ -103,9 +114,12 @@ func runOffline_receivesFolder(index *Index, address string) {
 	//resultFile, e := os.Create("data/BasicResults.txt")
 	//if e != nil {log.Fatal(e)
 
+	var queryNum string
 	cutValue := 1 // To delete scores below 1
 	tokens := make([]string, 50) // TODO: fix this: assuming max query size 50 
 	var pairlist PairList
+	retrievedLists := make(map[string]PairList, len(QueryFiles))
+	fmt.Printf("Double Check: there are %v queries proccessed.", len(QueryFiles))
 
 	for _, queryFileName := range QueryFiles{
 		tokens = getTokensFromFile(queryFileName) 
@@ -118,7 +132,10 @@ func runOffline_receivesFolder(index *Index, address string) {
 			pairlist = SortMapByValue(docList, cutValue)
 		}
 		
-//		MakePrecRecal(pairlist)
+		// Add resluts to map. This map will be sent to precrecal.go 
+		// to create a Precision-Recall Graph.
+		queryNum = getQueryNumberFromQueryFileName(queryFileName)
+		retrievedLists[queryNum] = pairlist
 
 		// Print top search results:
 		fmt.Println()
@@ -128,6 +145,10 @@ func runOffline_receivesFolder(index *Index, address string) {
 		pairlist.Print()
 		fmt.Println()
 	}
+	
+	// Make Interpolated Precision-Recall Graph
+	prgraph := NewPRGraph()
+	prgraph.MakeAvgInterpolatedPRTable(retrievedLists)
 }
 
 func getTokensFromFile(fileName string) []string{
