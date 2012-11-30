@@ -30,19 +30,21 @@ func (prGraph *PRGraph) init(fileName string) {
 	//fmt.Println(len(prGraph.testSample))
 }
 
-func (prGraph *PRGraph) MakeAvgIntplPRTable(retrievedLists map[string]sortmap.PairList) {
+func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sortmap.PairList) {
 	numBins := 11
 	avgIntrplPRTable := make([]float64, numBins)
 	sampleSize := len(prGraph.testSample)
 	
 	for sample := range prGraph.testSample {
+		fmt.Printf("\nQueryNumber: %s\n", sample)
 		precision, recall, size :=makePrecRecallTable(retrievedLists[sample], prGraph.testSample[sample])
 		intrplPRTable := makeInterpolatedPRTable(precision, recall, size, numBins)
 		for i := 0 ; i < numBins ; i++ {
 			avgIntrplPRTable[i] += intrplPRTable[i]/float64(sampleSize)
 		}
+		fmt.Println("---------------------------------")
 	}
-	fmt.Println("\nAvg. Interpolated PR Table:\n")
+	fmt.Println("\n\n\nFinal Avg. Interpolated PR Table:\n")
 	for j:=0 ; j < numBins ; j++ {
 		fmt.Printf("%.2f  %.2f\n", float64(j)/10, avgIntrplPRTable[j])
 	}
@@ -63,6 +65,7 @@ func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]boo
 	 */
 	var num int
 	var pair sortmap.Pair
+	fmt.Printf("DocNum\tRecall\tPrecision\n")
 	for num, pair = range retrievedList {
 
 		// No need to continue because all correct results were already	displayed.
@@ -76,8 +79,7 @@ func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]boo
 		}
 		recall[num] = correctCount/totalExpected
 		precision[num] = correctCount/float64(num+1) // num retrieved sofar.
-		fmt.Println(pair.Key)
-		fmt.Printf("recall: %.2f,\tPrecision: %.2f\n", recall[num], precision[num])
+		fmt.Printf("%s\t%.2f\t%.2f\n", pair.Key, recall[num], precision[num])
 	}
 	return precision, recall, num
 }
@@ -120,9 +122,8 @@ func makeInterpolatedPRTable(precision, recall []float64, numRetrievals int, num
 		}
 		interpolatedPR[i] = max
 	}
-	fmt.Println("\nPrinting Interpolated Table:")
+	fmt.Println("\nInterpolated Table:")
 	for j:=0; j < numBins ; j++ {
-//		fmt.Printf("%.1f  %.2f\n", float64(j)/10, periods[j])
 		fmt.Printf("%.1f  %.2f\n", float64(j)/10, interpolatedPR[j])
 	}
 	return interpolatedPR
@@ -217,6 +218,6 @@ func main() {
 
 	prg := NewPRGraph___forTesting()
 	retrievedLists := map[string]sortmap.PairList {"100":list, "200":list2}
-	prg.MakeAvgIntplPRTable(retrievedLists)
+	prg.MakeAvgInterpolatedPRTable(retrievedLists)
 }
 
