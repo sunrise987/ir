@@ -2,21 +2,21 @@
 package sortmap
 
 import (
-	"sort"
 	"fmt"
+	"sort"
 )
-
 
 // A data structure to hold a Key/Value Pair.
 type Pair struct {
-  Key string
-  Value float64
+	Key   string
+	Value float64
 }
 
 // A slice of Pairs that implements sort.Interface to sort by Value.
 type PairList []Pair
-func (p PairList) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p PairList) Len() int { return len(p) }
+
+func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p PairList) Len() int           { return len(p) }
 func (p PairList) Less(i, j int) bool { return p[i].Value > p[j].Value }
 
 func (list PairList) Print() {
@@ -38,7 +38,7 @@ func sortMapByValue(m map[string]float64, cutValue int) PairList {
 	return p
 }
 
-func SortMapByValue(m map[string]float64, cutValue int) PairList{
+func SortMapByValue(m map[string]float64, cutValue int) PairList {
 	list := sortMapByValue(m, cutValue)
 	return list
 }

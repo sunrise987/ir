@@ -1,13 +1,13 @@
 package reverseindex
 
 import (
-	"fmt"
-	"os"
-	"log"
-	"strings"
-	"stemmer"
 	"flag"
+	"fmt"
+	"log"
 	"math"
+	"os"
+	"stemmer"
+	"strings"
 )
 
 var doStemmingFlag *bool = flag.Bool("stem", false, "Do stemming.")
@@ -20,37 +20,34 @@ var doStopwordsFlag *bool = flag.Bool("stopw", false, "Remove stop words.")
 type DocList map[string][]int
 
 type Statistics struct {
-	numDocs int
+	numDocs  int
 	numWords int
-	numOnes int
+	numOnes  int
 	/* Longest Posting List */
 	longestPLword string
 	longestPLsize int
-	/* Shortest Posting List */ 
+	/* Shortest Posting List */
 	shortestPLword string
 	shortestPLsize int
 }
 
 type Index struct {
 	reverseIndex map[string]DocList
-	stopwords map[string]bool
-	stat Statistics
+	stopwords    map[string]bool
+	stat         Statistics
 }
-
 
 func NewIndex() *Index {
 	index := &Index{}
 	index.init()
 	return index
 }
-	
-	
+
 func (index *Index) init() {
 	index.reverseIndex = make(map[string]DocList)
-	index.stopwords = make(map[string]bool)	
+	index.stopwords = make(map[string]bool)
 	index.stat.numDocs = 0
 }
-
 
 /*
  * Takes a query and returns the list of documents containing this qurey
@@ -62,26 +59,26 @@ func (index *Index) Query(query []string) map[string]float64 {
 	for d := range index.reverseIndex[query[0]] {
 		list[d] = 0
 	}
-	
+
 	i := 2
 	lastWord := ""
 	for _, word := range query {
-		word = strings.ToLower(string(word))		
-						
+		word = strings.ToLower(string(word))
+
 		// If the word is a connector
 		if word == "not" {
-			i = 0			
+			i = 0
 			continue
 		} else if word == "or" {
 			i = 1
 			continue
 		} else if word == "and" {
 			i = 2
-			continue		
+			continue
 		} else if word == "cand" {
 			i = 3
 			continue
-		}	
+		}
 		// If the word is not a connector
 		if *doStemmingFlag {
 			word = string(stemmer.Stem([]byte(word)))
@@ -90,65 +87,66 @@ func (index *Index) Query(query []string) map[string]float64 {
 		// Do NOT modify this variable.
 		templist := index.reverseIndex[word]
 		docFreq := float64(len(templist))
-		invDocFreq := math.Log10(float64(index.stat.numDocs)/ docFreq)
+		invDocFreq := math.Log10(float64(index.stat.numDocs) / docFreq)
 		switch i {
-			case 3:
-				// Perform 'cand' operation.
-				for doc := range list {
-					if _, exists := templist[doc] ; !exists {
-						delete(list, doc)											
-					} else if lastWord != "" {
-						// Check if it is consecutive with each other in the each document.
-						if !consecutive(index.reverseIndex[lastWord][doc], templist[doc]) {
-							delete(list, doc)
-      					} else {
-      						// Calculate score for this document.
-      						termFreq := float64(len(templist[doc]))				
-							termFreqLog := 1 + math.Log10(termFreq)
-							weighting := termFreqLog * invDocFreq
-							list[doc] += weighting
-      					}
-					}
-				}
-			case 2: 
-				// Perform 'and' operation.
-				for doc := range list {							
-					if _, exists := templist[doc] ; !exists {
-						delete(list, doc)													
+		case 3:
+			// Perform 'cand' operation.
+			for doc := range list {
+				if _, exists := templist[doc]; !exists {
+					delete(list, doc)
+				} else if lastWord != "" {
+					// Check if it is consecutive with each other in the each document.
+					if !consecutive(index.reverseIndex[lastWord][doc], templist[doc]) {
+						delete(list, doc)
 					} else {
-      					// Calculate score for this document.
-      					termFreq := float64(len(templist[doc]))				
+						// Calculate score for this document.
+						termFreq := float64(len(templist[doc]))
 						termFreqLog := 1 + math.Log10(termFreq)
 						weighting := termFreqLog * invDocFreq
 						list[doc] += weighting
-      				} 
-				}			
-			case 1:
-				// Perform 'or' operation.
-				for doc := range templist {
-					if _, exists := list[doc] ; !exists {
-						list[doc] = 0	
 					}
+				}
+			}
+		case 2:
+			// Perform 'and' operation.
+			for doc := range list {
+				if _, exists := templist[doc]; !exists {
+					delete(list, doc)
+				} else {
 					// Calculate score for this document.
-      				termFreq := float64(len(templist[doc]))				
+					termFreq := float64(len(templist[doc]))
 					termFreqLog := 1 + math.Log10(termFreq)
 					weighting := termFreqLog * invDocFreq
-					list[doc] += weighting					
+					list[doc] += weighting
 				}
-			
-			case 0:
-				// Perform 'not' operation.
-				for doc := range list {
-					if _, exists := templist[doc] ; exists {
-						delete(list, doc)			
-					}
-				}			
+			}
+		case 1:
+			// Perform 'or' operation.
+			for doc := range templist {
+				if _, exists := list[doc]; !exists {
+					list[doc] = 0
+				}
+				// Calculate score for this document.
+				termFreq := float64(len(templist[doc]))
+				termFreqLog := 1 + math.Log10(termFreq)
+				weighting := termFreqLog * invDocFreq
+				list[doc] += weighting
+			}
+
+		case 0:
+			// Perform 'not' operation.
+			for doc := range list {
+				if _, exists := templist[doc]; exists {
+					delete(list, doc)
+				}
+			}
 		}
 		lastWord = word
 		//fmt.Printf("last word : %s\n", lastWord)
 	}
 	return list
 }
+
 /* Both arrays 'last' and 'current' store positional values (int) for two different 
  * words in the same file. This method checks if the 'last' word is located at the
  * immediate previous position then the 'current' word. So, this function searches 
@@ -157,9 +155,9 @@ func consecutive(last []int, current []int) bool {
 	lastI := 0
 	curI := 0
 	for curI < len(current) && lastI < len(last) {
-		li := int(math.Min(float64(lastI), float64(len(last) - 1)))
-		ci := int(math.Min(float64(curI), float64(len(current) - 1)))
-		 
+		li := int(math.Min(float64(lastI), float64(len(last)-1)))
+		ci := int(math.Min(float64(curI), float64(len(current)-1)))
+
 		if last[li]+1 == current[ci] {
 			return true
 		} else if last[li] > current[ci] {
@@ -169,16 +167,16 @@ func consecutive(last []int, current []int) bool {
 		} else if last[li] == current[ci] {
 			log.Fatal("two words exist in the same location at the same document!")
 		}
-		
+
 	}
 	return false
 }
 
-func GetWordsList(count int, data []byte) map[string]bool{
+func GetWordsList(count int, data []byte) map[string]bool {
 	i := 0
-	word := ""	
+	word := ""
 	mymap := make(map[string]bool)
-	
+
 	for i < count {
 		word, i = GetNextWord(data, count, i)
 		word = strings.ToLower(word)
@@ -191,23 +189,23 @@ func GetWordsList(count int, data []byte) map[string]bool{
 
 func (index *Index) ListStopWords(count int, data []byte) {
 	i := 0
-	word := ""	
+	word := ""
 	for i < count {
 		word, i = GetNextWord(data, count, i)
 		word = strings.ToLower(word)
 		if word != "" {
 			index.stopwords[word] = true
-		}		
+		}
 	}
-	fmt.Print()	
+	fmt.Print()
 	//fmt.Println(stopwords)
 }
 
 func ReadFile(fileName string) (int, []byte) {
-	file, err := os.Open(fileName)	
+	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal(err)
-	}	
+	}
 	data := make([]byte, 500000) // TODO: Fix the size of the data array
 	count, err := file.Read(data)
 	if err != nil {
@@ -216,29 +214,29 @@ func ReadFile(fileName string) (int, []byte) {
 	//fmt.Printf("- read %d bytes: %q\n\n", count, data[:count])	
 	return count, data
 }
-	
-func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {	
+
+func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {
 	// This represent the count inside each document. 
 	// Will be used to note the position of a term in a document.
-	numWords := 0	
+	numWords := 0
 	i := 0
 	word := ""
 	fileNameAdded := false
-	
+
 	for i < count {
 		word, i = GetNextWord(data, count, i)
-						
-		if _, exists := index.stopwords[word]; (exists && *doStopwordsFlag) || word == ""{
+
+		if _, exists := index.stopwords[word]; (exists && *doStopwordsFlag) || word == "" {
 			// Ignore the word and not put in the index
 			continue
 		}
 		numWords++
 		word = strings.ToLower(word)
-			
+
 		if *doStemmingFlag {
 			word = string(stemmer.Stem([]byte(word)))
-		}	
-			
+		}
+
 		if _, exists := index.reverseIndex[word]; exists {
 			if _, entryExists := index.reverseIndex[word][fileName]; entryExists {
 				index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
@@ -246,7 +244,7 @@ func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {
 				index.reverseIndex[word][fileName] = make([]int, 0, 10)
 				index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
 				// Compute statistics
-				fileNameAdded = true				
+				fileNameAdded = true
 			}
 			//fmt.Println(index.reverseIndex[word][fileName])
 		} else {
@@ -254,8 +252,8 @@ func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {
 			index.reverseIndex[word][fileName] = make([]int, 0, 10)
 			index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
 			// Compute statistics
-			fileNameAdded = true								
-		}		
+			fileNameAdded = true
+		}
 		//fmt.Println(index.reverseIndex)		
 	}
 	if fileNameAdded {
@@ -269,15 +267,15 @@ func (index *Index) computeStats() {
 	index.stat.longestPLsize = 0
 	index.stat.numOnes = 0
 	index.stat.numWords = 0
-	
+
 	for word := range index.reverseIndex {
 		if len(index.reverseIndex[word]) < index.stat.shortestPLsize {
 			index.stat.shortestPLsize = len(index.reverseIndex[word])
-			index.stat.shortestPLword = word			
+			index.stat.shortestPLword = word
 		}
 		if len(index.reverseIndex[word]) > index.stat.longestPLsize {
 			index.stat.longestPLsize = len(index.reverseIndex[word])
-			index.stat.longestPLword = word			
+			index.stat.longestPLword = word
 		}
 		index.stat.numWords++
 		index.stat.numOnes += len(index.reverseIndex[word])
@@ -297,47 +295,53 @@ func (index *Index) PrintStatistics() {
 /*
  * Returns the next word from the []byte data. Splits according to spaces and Punktuation marks. 
  * It includes numbers in words. It returns "" if called at the end of the []byte array. 
- */ 
+ */
 func GetNextWord(data []byte, count, index int) (string, int) {
 	word := ""
-	
+
 	for _, c := range data[index:count] {
 		index++
 		//fmt.Println("word: ", word)
 		//fmt.Println("index: ", index)
 		//fmt.Println("c: ", c)
-	
+
 		// Any new line or space
-		if ((8 <= c && c <= 10) || (32 <= c && c <= 47) || (58 <= c && c <= 64)) {
+		if (8 <= c && c <= 10) || (32 <= c && c <= 47) || (58 <= c && c <= 64) {
 			//fmt.Println("Exit at IF statement")			
 			return word, index
-			
-		// A word starts or continues
+
+			// A word starts or continues
 		} else {
 			word = word + string(c)
 			//fmt.Println("\nNo exit at ELSE statement")					
-		}				
+		}
 	}
 	//fmt.Println("Exit at FOR loop")	
 	return word, index
 }
 
-
 /**
  * Okt 31, 2012 
  */
- 
- /* Takes a list of qury terms and scores the document for this query. */
+
+/* Takes a list of qury terms and scores the document for this query. */
 func (index *Index) score(query []string, docs DocList) float64 {
 	for doc, _ := range docs {
-		score := 0.0		
+		score := 0.0
 		for _, term := range query {
 			fmt.Println(term)
 			invDocFreq := float64(index.stat.numDocs) / float64(len(index.reverseIndex[term]))
 			termFreq := float64(len(index.reverseIndex[term][doc]))
 			score += (1 + math.Log10(termFreq)) * math.Log10(invDocFreq)
-		}		
-	} 
-	
+		}
+	}
+
 	return 0.0
 }
+
+/**
+ * Nov 30, 2012
+ */
+func (index *Index) calculateWeightVector() {}//[]float64 {}
+
+func (index *Index) createNewQuery(alpha, beta float64) {}
