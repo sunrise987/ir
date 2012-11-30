@@ -50,6 +50,13 @@ func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sor
 	}
 }
 
+func (prGraph *PRGraph) MakeOneInterpolatedPRTable(retrievedList sortmap.PairList, queryNum string) {
+	numBins := 11
+	fmt.Printf("\nQueryNumber: %s\n", queryNum)
+	precision, recall, size :=makePrecRecallTable(retrievedList, prGraph.testSample[queryNum])
+	makeInterpolatedPRTable(precision, recall, size, numBins)
+}
+
 func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]bool) ([]float64, []float64, int) {
 	totalExpected := float64(len(testData))
 	precision := make([]float64, len(retrievedList))

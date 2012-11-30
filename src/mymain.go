@@ -36,8 +36,9 @@ func main() {
         index := RunMakeReverseIndex(corpus, stopwords)
 
 	
-	//runOnline(index)	
-	runOffline_receivesFolder(index, root + "data/IR_Project2_Queries/*")
+	//runOnline(index)
+	runOffline_receivesFile(index, root + "data/IR_Project2_Queries/Q1")
+	//runOffline_receivesFolder(index, root + "data/IR_Project2_Queries/*")
 
 }
 
@@ -149,6 +150,38 @@ func runOffline_receivesFolder(index *Index, address string) {
 	// Make Interpolated Precision-Recall Graph
 	prgraph := NewPRGraph()
 	prgraph.MakeAvgInterpolatedPRTable(retrievedLists)
+}
+
+
+func runOffline_receivesFile(index *Index, queryFileName string) {
+	// Get Query.
+	tokens := getTokensFromFile(queryFileName) 
+    	tokens = addANDS(tokens)
+
+	// Get Query Results.
+       	docList := index.Query(tokens)    	
+
+	// Rank Results.
+	cutValue := 1 // To delete scores below 1.
+	var pairlist PairList
+	if *tenFlag {
+		pairlist = SortMapByValue_topTen(docList, cutValue)
+	} else {
+		pairlist = SortMapByValue(docList, cutValue)
+	}
+	
+	// Print top search results:
+	fmt.Println(queryFileName)		
+	fmt.Printf("Number of matches: %d\n\n", len(docList))
+	fmt.Printf("DocName\tScore\n")
+	pairlist.Print()
+	fmt.Println()
+	
+
+	// Make Interpolated Precision-Recall Graph
+	queryNum := getQueryNumberFromQueryFileName(queryFileName)
+	prgraph := NewPRGraph()
+	prgraph.MakeOneInterpolatedPRTable(pairlist, queryNum)
 }
 
 func getTokensFromFile(fileName string) []string{
