@@ -1,3 +1,4 @@
+// XXX: Remove unused commented code.
 //package main
 package sortmap
 
@@ -51,6 +52,10 @@ func getMapFromList(list PairList) map[string]float64 {
 	return returnMap
 }
 
+// XXX: Don't hard code topTen into the code. Pass a parameter top_n instead.
+// Also rename the function to SortMapByValueTopN. Don't put underscores into
+// function names.
+
 // A function to turn a map into a PairList, then sort and return it.       
 // any Value below cutValue will be deleted.                   
 func SortMapByValue_topTen(m map[string]float64, cutValue int) PairList {
@@ -60,6 +65,7 @@ func SortMapByValue_topTen(m map[string]float64, cutValue int) PairList {
 	return topTen
 }
 
+// XXX: Put this into a sortmap_test.go.
 func main() {
 	mymap := make(map[string]float64)
 	mymap["bar1"] = 1.001
