@@ -10,6 +10,9 @@ import (
 )
 
 type PRGraph struct {
+	// XXX: Pick a better variable name.
+	// XXX: Also please explain the type. Even maybe define a
+	// new type for map[string]bool which describes it better.
 	testSample map[string]map[string]bool
 }
 
@@ -19,6 +22,7 @@ func NewPRGraph() *PRGraph {
 	return prGraph
 }
 
+// XXX: Move this function to precrecal_test.go instead.
 func NewPRGraph___forTesting() *PRGraph {
 	prGraph := &PRGraph{}
 	prGraph.testSample = readTestSampleToMap___forTesting()
@@ -161,6 +165,7 @@ func readTestSampleToMap(file string) map[string]map[string]bool {
 			}
 		}
 	}
+	// XXX: Remove unused commented out code.
 	/*
 		for key := range testSample {
 			fmt.Printf("%v: ", key)
@@ -184,6 +189,9 @@ func readTestSampleToMap___forTesting() map[string]map[string]bool {
 	return testDataSet
 }
 
+// XXX: Move this and all test related functions to precrecal_test.go. This is so
+// that one is not distracted by the tests function when reading the core
+// methods.
 func main() {
 	/* Note: for Testing purposes: Change package name to main.*/
 
