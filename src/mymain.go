@@ -3,6 +3,7 @@
  */
 package main
 
+// XXX: Separate importing of standard libraries and your own libraries.
 import (
 	"bufio"
 	"flag"
@@ -17,19 +18,23 @@ import (
 	"strings"
 )
 
+// XXX: Remove, not used.
 const APP_VERSION = "0.1"
 
 // default is "or"
 var andFlag *bool = flag.Bool("and", false, "Embed 'and' within each query.")
 var orFlag *bool = flag.Bool("or", false, "Embed 'or' within each query.")
 
+// XXX: Use flag.Int(results_to_print, 10, "The number of results to print") instead.
 var tenFlag *bool = flag.Bool("ten", false, "Print only 10 results.")
 
+// XXX: Remove extra newline after and before the beginning and ending of a block.
 /**/
 func main() {
 
 	// Make reversed index:
 	//root := "../"
+    // XXX: Define a flag that specifies the directory of the data files and use it here.
 	root := ""
 	corpus := root + "data/IR_Project1_Documents/*.txt"
 	stopwords := root + "data/stopwords.txt"
@@ -42,11 +47,15 @@ func main() {
 }
 
 /**/
+// XXX: The variable stopwords here is really stopwords_filename and corpus is
+// corpus_pattern. Rename it.
 func RunMakeReverseIndex(corpus, stopwords string) *Index {
 	flag.Parse() // Scan the arguments list
 
 	index := NewIndex()
 
+	// XXX: Rename count2 and data2 to reflect what it really is, i.e
+    // stopwords_count, stopwords
 	count2, data2 := ReadFile(stopwords)
 	index.ListStopWords(count2, data2)
 
@@ -59,6 +68,7 @@ func RunMakeReverseIndex(corpus, stopwords string) *Index {
 		count, data := ReadFile(fileName)
 
 		queryNum := getQueryNumberFromFileName(fileName)
+        // XXX: Remove unused commented code.
 		//fmt.Println(fileName)		
 		index.MakeReverseIndex(count, data, queryNum)
 	}
@@ -105,12 +115,15 @@ func runOnline_receivesQueryText(index *Index) {
 	}
 }
 
+// XXX: address? use a better variable name.
 func runOffline_receivesFolder(index *Index, address string) {
+	// XXX: Why QueryFiles and not just query_files?
 	QueryFiles, err := filepath.Glob(address)
 	fmt.Printf("%d queries to process.\n", len(QueryFiles))
 	if err != nil {
 		log.Fatal(err)
 	}
+	// XXX: Remove unused commented out code.
 	//os.Remove("data/BasicResults.txt")
 	//resultFile, e := os.Create("data/BasicResults.txt")
 	//if e != nil {log.Fatal(e)
@@ -190,6 +203,8 @@ func getTokensFromFile(fileName string) []string {
 	return tokens
 }
 
+// XXX: A simpler way of doing the same thing is to use strings.Join
+// and then strings.Split again.
 func addANDS(tokens []string) []string {
 	op := "or"
 	if *andFlag {
