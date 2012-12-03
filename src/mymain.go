@@ -1,10 +1,5 @@
 /*
- * To run, type: go run mymain.go [flags]
- * Flags: 
- * -stem       : Stems all words before storing them in reverse index. (ex. 'going' becomes 'go'.
- * -stopw      : Removes all stop words from reverse index. Stopwords are loaded from data file.
- * -numResults : Specifies how many top search results to print.
- * -dataDirectoryName : Can change to root path from 'data/'.
+ * To run, type: go run mymain.go -stem -stopw -ten
  */
 package main
 
@@ -17,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"bytes"
 
 	. "precrecal"
 	. "reverseindex"
@@ -35,18 +31,22 @@ var dataDirectoryName *string = flag.String("dataDirectoryName", "data/", "Data 
 func main() {
 	flag.Parse() // Scan the arguments list
 
+	resultFile, err1 := os.Create(*dataDirectoryName + "/results.txt")
+	if err1 != nil {log.Fatal(err1)}
+
+
 	// Make reversed index:
 	corpus := *dataDirectoryName + "IR_Project1_Documents/*.txt"
 	stopwords := *dataDirectoryName + "stopwords.txt"
-	index := RunMakeReverseIndex(corpus, stopwords)
+	index := RunMakeReverseIndex(corpus, stopwords, resultFile)
 
 	//runOnline_receivesQueryText(index)
-	//runOffline_receivesFile(index, *dataDirectoryName + "/IR_Project2_Queries/Q1")
-	runOffline_receivesFolder(index, *dataDirectoryName + "IR_Project2_Queries/*")
+	//runOffline_receivesFile(index, *dataDirectoryName + "/IR_Project2_Queries/Q1", resultFile)
+	runOffline_receivesFolder(index, *dataDirectoryName + "IR_Project2_Queries/*", resultFile)
 }
 
 /**/
-func RunMakeReverseIndex(corpus_pattern, stopwords_filename string) *Index {
+func RunMakeReverseIndex(corpus_pattern, stopwords_filename string, resultFile *os.File) *Index {
 	index := NewIndex()
 	stopwords_count, stopwords := ReadFile(stopwords_filename)
 	index.ListStopWords(stopwords_count, stopwords)
@@ -61,7 +61,7 @@ func RunMakeReverseIndex(corpus_pattern, stopwords_filename string) *Index {
 		queryNum := getQueryNumberFromFileName(fileName)
 		index.MakeReverseIndex(count, data, queryNum)
 	}
-	index.PrintStatistics()
+	index.PrintStatistics(resultFile)
 	return index
 }
 
@@ -104,12 +104,13 @@ func runOnline_receivesQueryText(index *Index) {
 	}
 }
 
-func runOffline_receivesFolder(index *Index, queryfiles_pattern string) {
+func runOffline_receivesFolder(index *Index, queryfiles_pattern string, resultsFile *os.File) {
+	var buffer bytes.Buffer
 	query_files, err := filepath.Glob(queryfiles_pattern)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Sprintf("%d queries to process.\n", len(query_files))
+	buffer.WriteString(fmt.Sprintf("%d queries to process.\n", len(query_files)))
 	
 	var queryNum string
 	cutValue := 1                // To delete scores below 1
@@ -128,20 +129,22 @@ func runOffline_receivesFolder(index *Index, queryfiles_pattern string) {
 		retrievedLists[queryNum] = pairlist
 
 		// Print top search results:
-		fmt.Println()
-		fmt.Println(queryFileName)
-		fmt.Printf("Number of matches: %d\n", len(docList))
-		fmt.Printf("DocName\tScore\n")
-		fmt.Printf(pairlist.PrintToString())
+		buffer.WriteString(fmt.Sprintln())
+		buffer.WriteString(fmt.Sprintln(queryFileName))
+		buffer.WriteString(fmt.Sprintf("Number of matches: %d\n", len(docList)))
+		buffer.WriteString(fmt.Sprintf("DocName\tScore\n"))
+		buffer.WriteString(pairlist.PrintToString())
 	}
-	fmt.Printf("\n\n\nMaking Precision-Recall Graph...\n\n")
+	buffer.WriteString(fmt.Sprintf("\n\n\nMaking Precision-Recall Graph...\n\n"))
+	_,err = resultsFile.WriteString(buffer.String())
+	if err != nil { log.Fatal(err) }
 
 	// Make Interpolated Precision-Recall Graph
 	prgraph := NewPRGraph()
 	prgraph.MakeAvgInterpolatedPRTable(retrievedLists)
 }
 
-func runOffline_receivesFile(index *Index, queryFileName string) {
+func runOffline_receivesFile(index *Index, queryFileName string, resultsFile *os.File) {
 	// Get Query.
 	tokens := getTokensFromFile(queryFileName)
 	tokens = joinTokensWithOp(tokens)
@@ -154,11 +157,14 @@ func runOffline_receivesFile(index *Index, queryFileName string) {
 	pairlist := SortMapByValue(docList, cutValue, *numResults)
 	
 	// Print top search results:
-	fmt.Println(queryFileName)
-	fmt.Printf("Number of matches: %d\n", len(docList))
-	fmt.Printf("DocName\tScore\n")
-	fmt.Printf(pairlist.PrintToString())
-	fmt.Println()
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintln(queryFileName))
+	buffer.WriteString(fmt.Sprintf("Number of matches: %d\n", len(docList)))
+	buffer.WriteString(fmt.Sprintf("DocName\tScore\n"))
+	buffer.WriteString(pairlist.PrintToString())
+	buffer.WriteString(fmt.Sprintln())
+	_,err := resultsFile.WriteString(buffer.String())
+	if err != nil { log.Fatal(err) }
 
 	// Make Interpolated Precision-Recall Graph
 	queryNum := getQueryNumberFromQueryFileName(queryFileName)
