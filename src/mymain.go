@@ -3,7 +3,6 @@
  */
 package main
 
-// XXX: Separate importing of standard libraries and your own libraries.
 import (
 	"bufio"
 	"flag"
@@ -12,67 +11,57 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
+	"bytes"
+
 	. "precrecal"
 	. "reverseindex"
 	. "sortmap"
-	"strings"
 )
-
-// XXX: Remove, not used.
-const APP_VERSION = "0.1"
 
 // default is "or"
 var andFlag *bool = flag.Bool("and", false, "Embed 'and' within each query.")
 var orFlag *bool = flag.Bool("or", false, "Embed 'or' within each query.")
 
-// XXX: Use flag.Int(results_to_print, 10, "The number of results to print") instead.
-var tenFlag *bool = flag.Bool("ten", false, "Print only 10 results.")
+var numResults *int = flag.Int("numResults", 10, "Print top ranked numResults.")
+var dataDirectoryName *string = flag.String("dataDirectoryName", "data/", "Data directory Name")
 
-// XXX: Remove extra newline after and before the beginning and ending of a block.
+
 /**/
 func main() {
+	flag.Parse() // Scan the arguments list
+
+	resultFile, err1 := os.Create(*dataDirectoryName + "/results.txt")
+	if err1 != nil {log.Fatal(err1)}
+
 
 	// Make reversed index:
-	//root := "../"
-    // XXX: Define a flag that specifies the directory of the data files and use it here.
-	root := ""
-	corpus := root + "data/IR_Project1_Documents/*.txt"
-	stopwords := root + "data/stopwords.txt"
-	index := RunMakeReverseIndex(corpus, stopwords)
+	corpus := *dataDirectoryName + "IR_Project1_Documents/*.txt"
+	stopwords := *dataDirectoryName + "stopwords.txt"
+	index := RunMakeReverseIndex(corpus, stopwords, resultFile)
 
 	//runOnline_receivesQueryText(index)
-	runOffline_receivesFile(index, root+"data/IR_Project2_Queries/Q1")
-	//runOffline_receivesFolder(index, root + "data/IR_Project2_Queries/*")
-
+	//runOffline_receivesFile(index, *dataDirectoryName + "/IR_Project2_Queries/Q1", resultFile)
+	runOffline_receivesFolder(index, *dataDirectoryName + "IR_Project2_Queries/*", resultFile)
 }
 
 /**/
-// XXX: The variable stopwords here is really stopwords_filename and corpus is
-// corpus_pattern. Rename it.
-func RunMakeReverseIndex(corpus, stopwords string) *Index {
-	flag.Parse() // Scan the arguments list
-
+func RunMakeReverseIndex(corpus_pattern, stopwords_filename string, resultFile *os.File) *Index {
 	index := NewIndex()
+	stopwords_count, stopwords := ReadFile(stopwords_filename)
+	index.ListStopWords(stopwords_count, stopwords)
 
-	// XXX: Rename count2 and data2 to reflect what it really is, i.e
-    // stopwords_count, stopwords
-	count2, data2 := ReadFile(stopwords)
-	index.ListStopWords(count2, data2)
-
-	fileNames, err := filepath.Glob(corpus)
+	fileNames, err := filepath.Glob(corpus_pattern)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, fileName := range fileNames {
 		count, data := ReadFile(fileName)
-
 		queryNum := getQueryNumberFromFileName(fileName)
-        // XXX: Remove unused commented code.
-		//fmt.Println(fileName)		
 		index.MakeReverseIndex(count, data, queryNum)
 	}
-	index.PrintStatistics()
+	index.PrintStatistics(resultFile)
 	return index
 }
 
@@ -115,79 +104,67 @@ func runOnline_receivesQueryText(index *Index) {
 	}
 }
 
-// XXX: address? use a better variable name.
-func runOffline_receivesFolder(index *Index, address string) {
-	// XXX: Why QueryFiles and not just query_files?
-	QueryFiles, err := filepath.Glob(address)
-	fmt.Printf("%d queries to process.\n", len(QueryFiles))
+func runOffline_receivesFolder(index *Index, queryfiles_pattern string, resultsFile *os.File) {
+	var buffer bytes.Buffer
+	query_files, err := filepath.Glob(queryfiles_pattern)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// XXX: Remove unused commented out code.
-	//os.Remove("data/BasicResults.txt")
-	//resultFile, e := os.Create("data/BasicResults.txt")
-	//if e != nil {log.Fatal(e)
-
+	buffer.WriteString(fmt.Sprintf("%d queries to process.\n", len(query_files)))
+	
 	var queryNum string
 	cutValue := 1                // To delete scores below 1
 	tokens := make([]string, 50) // TODO: fix this: assuming max query size 50 
-	var pairlist PairList
-	retrievedLists := make(map[string]PairList, len(QueryFiles))
-	fmt.Printf("Double Check: there are %v queries proccessed.", len(QueryFiles))
-
-	for _, queryFileName := range QueryFiles {
+	retrievedLists := make(map[string]PairList, len(query_files))
+	
+	for _, queryFileName := range query_files {
 		tokens = getTokensFromFile(queryFileName)
-		tokens = addANDS(tokens)
+		tokens = joinTokensWithOp(tokens)
 		docList := index.Query(tokens)
-
-		if *tenFlag {
-			pairlist = SortMapByValue_topTen(docList, cutValue)
-		} else {
-			pairlist = SortMapByValue(docList, cutValue)
-		}
-
+		pairlist := SortMapByValue(docList, cutValue, *numResults)
+		
 		// Add resluts to map. This map will be sent to precrecal.go 
 		// to create a Precision-Recall Graph.
 		queryNum = getQueryNumberFromQueryFileName(queryFileName)
 		retrievedLists[queryNum] = pairlist
 
 		// Print top search results:
-		fmt.Println()
-		fmt.Println(queryFileName)
-		fmt.Printf("Number of matches: %d\n\n", len(docList))
-		fmt.Printf("DocName\tScore\n")
-		pairlist.Print()
-		fmt.Println()
+		buffer.WriteString(fmt.Sprintln())
+		buffer.WriteString(fmt.Sprintln(queryFileName))
+		buffer.WriteString(fmt.Sprintf("Number of matches: %d\n", len(docList)))
+		buffer.WriteString(fmt.Sprintf("DocName\tScore\n"))
+		buffer.WriteString(pairlist.PrintToString())
 	}
+	buffer.WriteString(fmt.Sprintf("\n\n\nMaking Precision-Recall Graph...\n\n"))
+	_,err = resultsFile.WriteString(buffer.String())
+	if err != nil { log.Fatal(err) }
 
 	// Make Interpolated Precision-Recall Graph
 	prgraph := NewPRGraph()
 	prgraph.MakeAvgInterpolatedPRTable(retrievedLists)
 }
 
-func runOffline_receivesFile(index *Index, queryFileName string) {
+func runOffline_receivesFile(index *Index, queryFileName string, resultsFile *os.File) {
 	// Get Query.
 	tokens := getTokensFromFile(queryFileName)
-	tokens = addANDS(tokens)
+	tokens = joinTokensWithOp(tokens)
 
 	// Get Query Results.
 	docList := index.Query(tokens)
 
 	// Rank Results.
 	cutValue := 1 // To delete scores below 1.
-	var pairlist PairList
-	if *tenFlag {
-		pairlist = SortMapByValue_topTen(docList, cutValue)
-	} else {
-		pairlist = SortMapByValue(docList, cutValue)
-	}
-
+	pairlist := SortMapByValue(docList, cutValue, *numResults)
+	
 	// Print top search results:
-	fmt.Println(queryFileName)
-	fmt.Printf("Number of matches: %d\n\n", len(docList))
-	fmt.Printf("DocName\tScore\n")
-	pairlist.Print()
-	fmt.Println()
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintln(queryFileName))
+	buffer.WriteString(fmt.Sprintf("Number of matches: %d\n", len(docList)))
+	buffer.WriteString(fmt.Sprintf("DocName\tScore\n"))
+	buffer.WriteString(pairlist.PrintToString())
+	buffer.WriteString(fmt.Sprintln())
+	_,err := resultsFile.WriteString(buffer.String())
+	if err != nil { log.Fatal(err) }
 
 	// Make Interpolated Precision-Recall Graph
 	queryNum := getQueryNumberFromQueryFileName(queryFileName)
@@ -205,7 +182,7 @@ func getTokensFromFile(fileName string) []string {
 
 // XXX: A simpler way of doing the same thing is to use strings.Join
 // and then strings.Split again.
-func addANDS(tokens []string) []string {
+func joinTokensWithOp(tokens []string) []string {
 	op := "or"
 	if *andFlag {
 		op = "and"
