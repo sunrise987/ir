@@ -1,4 +1,3 @@
-//package main
 package precrecal
 
 import (
@@ -8,12 +7,9 @@ import (
 	"strconv"
 	"strings"
 )
-
+type SearchResults map[string]bool
 type PRGraph struct {
-	// XXX: Pick a better variable name.
-	// XXX: Also please explain the type. Even maybe define a
-	// new type for map[string]bool which describes it better.
-	testSample map[string]map[string]bool
+	TestQueries map[string]SearchResults
 }
 
 func NewPRGraph() *PRGraph {
@@ -22,42 +18,36 @@ func NewPRGraph() *PRGraph {
 	return prGraph
 }
 
-// XXX: Move this function to precrecal_test.go instead.
-func NewPRGraph___forTesting() *PRGraph {
-	prGraph := &PRGraph{}
-	prGraph.testSample = readTestSampleToMap___forTesting()
-	return prGraph
-}
 
 func (prGraph *PRGraph) init(fileName string) {
-	prGraph.testSample = readTestSampleToMap(fileName)
-	//fmt.Println(len(prGraph.testSample))
+	prGraph.TestQueries = readTestSampleToMap(fileName)
 }
 
-func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sortmap.PairList) {
+func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sortmap.PairList) []float64 {
 	numBins := 11
 	avgIntrplPRTable := make([]float64, numBins)
-	sampleSize := len(prGraph.testSample)
-
-	for sample := range prGraph.testSample {
+	sampleSize := len(prGraph.TestQueries)
+	
+	for sample := range prGraph.TestQueries {
 		fmt.Printf("\nQueryNumber: %s\n", sample)
-		precision, recall, size := makePrecRecallTable(retrievedLists[sample], prGraph.testSample[sample])
+		precision, recall, size := makePrecRecallTable(retrievedLists[sample], prGraph.TestQueries[sample])
 		intrplPRTable := makeInterpolatedPRTable(precision, recall, size, numBins)
 		for i := 0; i < numBins; i++ {
 			avgIntrplPRTable[i] += intrplPRTable[i] / float64(sampleSize)
 		}
-		fmt.Println("---------------------------------")
 	}
-	fmt.Println("\n\n\nFinal Avg. Interpolated PR Table:\n")
+	fmt.Println("\n\nAverage Interpolated Precision Recall Table.")
+	fmt.Println("Recall\tPrecision")
 	for j := 0; j < numBins; j++ {
 		fmt.Printf("%.2f  %.2f\n", float64(j)/10, avgIntrplPRTable[j])
 	}
+	return avgIntrplPRTable
 }
 
 func (prGraph *PRGraph) MakeOneInterpolatedPRTable(retrievedList sortmap.PairList, queryNum string) {
 	numBins := 11
 	fmt.Printf("\nQueryNumber: %s\n", queryNum)
-	precision, recall, size := makePrecRecallTable(retrievedList, prGraph.testSample[queryNum])
+	precision, recall, size := makePrecRecallTable(retrievedList, prGraph.TestQueries[queryNum])
 	makeInterpolatedPRTable(precision, recall, size, numBins)
 }
 
@@ -66,14 +56,6 @@ func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]boo
 	precision := make([]float64, len(retrievedList))
 	recall := make([]float64, len(retrievedList))
 	correctCount := 0.0
-	/*
-		fmt.Printf("retrieved: %v, expected: %v\n", len(retrievedList), totalExpected)
-		fmt.Println("Test Data:")
-		for n := range testData {
-			fmt.Printf("%v\n", n)
-		}
-		fmt.Printf("----\n")
-	*/
 	var num int
 	var pair sortmap.Pair
 	fmt.Printf("DocNum\tRecall\tPrecision\n")
@@ -135,15 +117,15 @@ func makeInterpolatedPRTable(precision, recall []float64, numRetrievals int, num
 		}
 		interpolatedPR[i] = max
 	}
-	fmt.Println("\nInterpolated Table:")
+	fmt.Println("Interpolated Table:")
 	for j := 0; j < numBins; j++ {
 		fmt.Printf("%.1f  %.2f\n", float64(j)/10, interpolatedPR[j])
 	}
 	return interpolatedPR
 }
 
-func readTestSampleToMap(file string) map[string]map[string]bool {
-	testSample := make(map[string]map[string]bool)
+func readTestSampleToMap(file string) map[string]SearchResults {
+	testQueries := make(map[string]SearchResults)
 	data, _ := ioutil.ReadFile(file)
 	lines := strings.Split(string(data), "\r\n")
 
@@ -161,76 +143,17 @@ func readTestSampleToMap(file string) map[string]map[string]bool {
 						maplist[tokens[i]] = true
 					}
 				}
-				testSample[tokens[0]] = maplist
+				testQueries[tokens[0]] = maplist
 			}
 		}
 	}
-	// XXX: Remove unused commented out code.
-	/*
-		for key := range testSample {
-			fmt.Printf("%v: ", key)
-			fmt.Println(testSample[key])
-		}
-		fmt.Println(len(testSample))
-	*/
-	return testSample
+	return testQueries
 }
 
-func readTestSampleToMap___forTesting() map[string]map[string]bool {
-	testData := make(map[string]bool, 2)
-	testData["1"] = true
-	testData["3"] = true
-	testData2 := make(map[string]bool, 3)
-	testData2["2"] = true
-	testData2["3"] = true
-	testData2["4"] = true
-
-	testDataSet := map[string]map[string]bool{"100": testData, "200": testData2}
-	return testDataSet
-}
-
-// XXX: Move this and all test related functions to precrecal_test.go. This is so
-// that one is not distracted by the tests function when reading the core
-// methods.
-func main() {
-	/* Note: for Testing purposes: Change package name to main.*/
-
-	// Test 1
-	list := make(sortmap.PairList, 10)
-	list[0] = sortmap.Pair{"2", 11.53}
-	list[1] = sortmap.Pair{"3", 9.30}
-	list[2] = sortmap.Pair{"8", 9.26}
-	list[3] = sortmap.Pair{"7", 5.26}
-	list[4] = sortmap.Pair{"9", 2.26}
-	list[5] = sortmap.Pair{"1", 1.26}
-	list[6] = sortmap.Pair{"20", 1.26}
-	list[7] = sortmap.Pair{"19", 1.26}
-
-	testData := make(map[string]bool, 2)
-	testData["1"] = true
-	testData["3"] = true
-
-	// Test 2
-	list2 := make(sortmap.PairList, 10)
-	list2[0] = sortmap.Pair{"3", 11.53}
-	list2[1] = sortmap.Pair{"2", 9.30}
-	list2[2] = sortmap.Pair{"5", 9.26}
-	list2[3] = sortmap.Pair{"7", 5.26}
-	list2[4] = sortmap.Pair{"4", 2.26}
-	list2[5] = sortmap.Pair{"90", 1.26}
-	list2[6] = sortmap.Pair{"20", 1.26}
-	list2[7] = sortmap.Pair{"19", 1.26}
-
-	testData2 := make(map[string]bool, 3)
-	testData2["2"] = true
-	testData2["3"] = true
-	testData2["4"] = true
-
-	//numBins := 11
-	//precision, recall, size := makePrecRecallTable(list, testData)
-	//makeInterpolatedPRTable(precision, recall, size, numBins)
-
-	prg := NewPRGraph___forTesting()
-	retrievedLists := map[string]sortmap.PairList{"100": list, "200": list2}
-	prg.MakeAvgInterpolatedPRTable(retrievedLists)
+func (prgraph *PRGraph) Print() {
+	for key := range prgraph.TestQueries {
+		fmt.Printf("%v: ", key)
+		fmt.Println(prgraph.TestQueries[key])
+	}
+	fmt.Println(len(prgraph.TestQueries))
 }
