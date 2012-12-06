@@ -94,7 +94,7 @@ func runOnline_receivesQueryText(index *Index) {
 
 		lowcaseline := strings.ToLower(string(line))
 		tokens := strings.Split(lowcaseline, " ")
-		docList := index.Query(tokens)
+		docList := index.SearchQuery(tokens)
 		fmt.Printf("Number of matches: %d\n", len(docList))
 		for doc := range docList {
 			if docList[doc] >= 1 {
@@ -119,7 +119,7 @@ func runOffline_receivesFolder(index *Index, queryfiles_pattern string) {
 	for _, queryFileName := range query_files {
 		tokens = getTokensFromFile(queryFileName)
 		tokens = joinTokensWithOp(tokens)
-		docList := index.Query(tokens)
+		docList := index.SearchQuery(tokens)
 		pairlist := SortMapByValue(docList, cutValue, *numResults)
 		
 		// Add resluts to map. This map will be sent to precrecal.go 
@@ -147,7 +147,7 @@ func runOffline_receivesFile(index *Index, queryFileName string) {
 	tokens = joinTokensWithOp(tokens)
 
 	// Get Query Results.
-	docList := index.Query(tokens)
+	docList := index.SearchQuery(tokens)
 
 	// Rank Results.
 	cutValue := 1 // To delete scores below 1.
@@ -177,7 +177,7 @@ func getTokensFromFile(fileName string) []string {
 // XXX: A simpler way of doing the same thing is to use strings.Join
 // and then strings.Split again.
 func joinTokensWithOp(tokens []string) []string {
-	op := "or"
+	op := "and"
 	if *andFlag {
 		op = "and"
 	} else if *orFlag {

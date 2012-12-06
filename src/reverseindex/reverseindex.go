@@ -49,15 +49,33 @@ func (index *Index) init() {
 	index.stat.numDocs = 0
 }
 
+func (index *Index) getQueryWeights(query []string) map[string]float64 {
+	//termWeight = log (N/df) = totalNumDocuments/ numDocumentsThatContainThisTerm.
+	totalNumDocs := float64(index.stat.numDocs)
+	termWeights := make(map[string]float64)
+	for _, word := range query {
+		docFreq_t := float64(len(index.reverseIndex[word]))
+		termWeights[word] = totalNumDocs / docFreq_t
+	}
+	return termWeights
+}
+
 /*
  * Takes a query and returns the list of documents containing this qurey
  * For phrase queries, query format must be "[word1] cand [word2] cand ..." 
  */
-func (index *Index) Query(query []string) map[string]float64 {
-	// The following two lists are initialized to prevent aliacing.
-	list := make(map[string]float64)
+func (index *Index) SearchQuery(query []string) map[string]float64 {
+	// Find weights of query terms. Type map[string]float64
+	queryTermWeight := index.getQueryWeights(query)
+
+	// Stores the cosine normalization factor for each document.
+	norm_d := make(map[string]float64)
+
+	// Stores the cosine similarity measure between the query and document. Initialized to prevent aliacing.
+	rankingList := make(map[string]float64)
 	for d := range index.reverseIndex[query[0]] {
-		list[d] = 0
+		rankingList[d] = 0
+		norm_d[d] = 0
 	}
 
 	i := 2
@@ -91,60 +109,82 @@ func (index *Index) Query(query []string) map[string]float64 {
 		switch i {
 		case 3:
 			// Perform 'cand' operation.
-			for doc := range list {
+			for doc := range rankingList {
 				if _, exists := templist[doc]; !exists {
-					delete(list, doc)
+					delete(rankingList, doc)
+					delete(norm_d, doc)
 				} else if lastWord != "" {
 					// Check if it is consecutive with each other in the each document.
 					if !consecutive(index.reverseIndex[lastWord][doc], templist[doc]) {
-						delete(list, doc)
+						delete(rankingList, doc)
+						delete(norm_d, doc)
 					} else {
 						// Calculate score for this document.
 						termFreq := float64(len(templist[doc]))
 						termFreqLog := 1 + math.Log10(termFreq)
-						weighting := termFreqLog * invDocFreq
-						list[doc] += weighting
+						docTermWeight := termFreqLog * invDocFreq
+						rankingList[doc] += (docTermWeight * queryTermWeight[word])
+						norm_d[doc] += (docTermWeight * docTermWeight)
 					}
 				}
 			}
 		case 2:
 			// Perform 'and' operation.
-			for doc := range list {
+			for doc := range rankingList {
 				if _, exists := templist[doc]; !exists {
-					delete(list, doc)
+					delete(rankingList, doc)
+					delete(norm_d, doc)
 				} else {
 					// Calculate score for this document.
 					termFreq := float64(len(templist[doc]))
 					termFreqLog := 1 + math.Log10(termFreq)
-					weighting := termFreqLog * invDocFreq
-					list[doc] += weighting
+					docTermWeight := termFreqLog * invDocFreq
+					rankingList[doc] += (docTermWeight * queryTermWeight[word])
+					norm_d[doc] += (docTermWeight * docTermWeight)
 				}
 			}
 		case 1:
 			// Perform 'or' operation.
 			for doc := range templist {
-				if _, exists := list[doc]; !exists {
-					list[doc] = 0
+				if _, exists := rankingList[doc]; !exists {
+					rankingList[doc] = 0
+					norm_d[doc] = 0
 				}
 				// Calculate score for this document.
 				termFreq := float64(len(templist[doc]))
 				termFreqLog := 1 + math.Log10(termFreq)
-				weighting := termFreqLog * invDocFreq
-				list[doc] += weighting
+				docTermWeight := termFreqLog * invDocFreq
+				rankingList[doc] += (docTermWeight * queryTermWeight[word])
+				norm_d[doc] += (docTermWeight * docTermWeight)
 			}
 
 		case 0:
 			// Perform 'not' operation.
-			for doc := range list {
+			for doc := range rankingList {
 				if _, exists := templist[doc]; exists {
-					delete(list, doc)
+					delete(rankingList, doc)
+					delete(norm_d, doc)
 				}
 			}
 		}
 		lastWord = word
 		//fmt.Printf("last word : %s\n", lastWord)
 	}
-	return list
+
+	// Calculate the cosine normalization factor for the query.
+	norm_q := 0.0
+	for _, word := range query {
+		norm_q += (queryTermWeight[word] * queryTermWeight[word])
+	}
+	norm_q = math.Sqrt(norm_q)
+
+	// Divide rank by normalization factors.
+	for doc := range rankingList {
+		norm_d[doc] = math.Sqrt(norm_d[doc])
+		rankingList[doc] = (rankingList[doc] / (norm_d[doc] * norm_q))
+	}
+
+	return rankingList
 }
 
 /* Both arrays 'last' and 'current' store positional values (int) for two different 

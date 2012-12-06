@@ -49,8 +49,9 @@ func sortMapByValue(m map[string]float64, cutValue int) PairList {
 // any Value below cutValue will be deleted.                   
 // This function only return topN values ranked.
 func SortMapByValue(m map[string]float64, cutValue int, topN int) PairList {
+	fmt.Printf("\n\n---\nmap length: %v\nmap capacity: %v\n\n", len(m), cap(m))
 	list := sortMapByValue(m, cutValue)
-	if topN != -1 {
+	if topN != -1 && topN < len(list) {
 		topNlist := make(PairList, topN)
 		topNlist = list[0:topN]
 		return topNlist
