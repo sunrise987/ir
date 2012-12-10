@@ -52,12 +52,17 @@ func (index *Index) init() {
 func (index *Index) getQueryWeights(query []string) map[string]float64 {
 	//termWeight = log (N/df) = totalNumDocuments/ numDocumentsThatContainThisTerm.
 	totalNumDocs := float64(index.stat.numDocs)
-	termWeights := make(map[string]float64)
+	termWeight := make(map[string]float64)
 	for _, word := range query {
 		docFreq_t := float64(len(index.reverseIndex[word]))
-		termWeights[word] = totalNumDocs / docFreq_t
+		// If a query term never appears in any of the indexed documents. It's weight will be infinity.
+		// Avoid this by uncommenting the following if statement.
+		//if docFreq_t == 0 { docFreq_t = 1 }
+		termWeight[word] = totalNumDocs / docFreq_t
+		// Or set it's weight to zero altogether.
+		if docFreq_t == 0 { termWeight[word] = 0 }
 	}
-	return termWeights
+	return termWeight
 }
 
 /*
@@ -156,6 +161,8 @@ func (index *Index) SearchQuery(query []string) map[string]float64 {
 				docTermWeight := termFreqLog * invDocFreq
 				rankingList[doc] += (docTermWeight * queryTermWeight[word])
 				norm_d[doc] += (docTermWeight * docTermWeight)
+				//fmt.Printf("\n\ndoc: %s, W_dt: %.2f, w_qt: %.2f, norm_d: %.2f\n", doc, docTermWeight, queryTermWeight[word], norm_d[doc])
+				//fmt.Printf("Rank: %.2f\n", rankingList[doc] )
 			}
 
 		case 0:
@@ -168,7 +175,6 @@ func (index *Index) SearchQuery(query []string) map[string]float64 {
 			}
 		}
 		lastWord = word
-		//fmt.Printf("last word : %s\n", lastWord)
 	}
 
 	// Calculate the cosine normalization factor for the query.
@@ -177,11 +183,13 @@ func (index *Index) SearchQuery(query []string) map[string]float64 {
 		norm_q += (queryTermWeight[word] * queryTermWeight[word])
 	}
 	norm_q = math.Sqrt(norm_q)
-
+	fmt.Println("------------")
 	// Divide rank by normalization factors.
 	for doc := range rankingList {
+		//fmt.Printf("\nRank: %.2f\tnorm_d: %.2f\tnorm_q: %.2f\n", rankingList[doc], norm_d[doc], norm_q)
 		norm_d[doc] = math.Sqrt(norm_d[doc])
 		rankingList[doc] = (rankingList[doc] / (norm_d[doc] * norm_q))
+		//fmt.Printf("After normalization rank: %.2f\n", rankingList[doc] )
 	}
 
 	return rankingList
@@ -238,7 +246,6 @@ func (index *Index) ListStopWords(count int, data []byte) {
 		}
 	}
 	fmt.Print()
-	//fmt.Println(stopwords)
 }
 
 func ReadFile(fileName string) (int, []byte) {
@@ -251,17 +258,16 @@ func ReadFile(fileName string) (int, []byte) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//fmt.Printf("- read %d bytes: %q\n\n", count, data[:count])	
 	return count, data
 }
 
-func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {
+func (index *Index) MakeReverseIndex(count int, data []byte, docName string) {
 	// This represent the count inside each document. 
 	// Will be used to note the position of a term in a document.
 	numWords := 0
 	i := 0
 	word := ""
-	fileNameAdded := false
+	docNameAdded := false
 
 	for i < count {
 		word, i = GetNextWord(data, count, i)
@@ -278,28 +284,25 @@ func (index *Index) MakeReverseIndex(count int, data []byte, fileName string) {
 		}
 
 		if _, exists := index.reverseIndex[word]; exists {
-			if _, entryExists := index.reverseIndex[word][fileName]; entryExists {
-				index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
+			if _, entryExists := index.reverseIndex[word][docName]; entryExists {
+				index.reverseIndex[word][docName] = append(index.reverseIndex[word][docName], numWords)
 			} else {
-				index.reverseIndex[word][fileName] = make([]int, 0, 10)
-				index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
+				index.reverseIndex[word][docName] = make([]int, 0, 10)
+				index.reverseIndex[word][docName] = append(index.reverseIndex[word][docName], numWords)
 				// Compute statistics
-				fileNameAdded = true
+				docNameAdded = true
 			}
-			//fmt.Println(index.reverseIndex[word][fileName])
 		} else {
 			index.reverseIndex[word] = make(map[string][]int)
-			index.reverseIndex[word][fileName] = make([]int, 0, 10)
-			index.reverseIndex[word][fileName] = append(index.reverseIndex[word][fileName], numWords)
+			index.reverseIndex[word][docName] = make([]int, 0, 10)
+			index.reverseIndex[word][docName] = append(index.reverseIndex[word][docName], numWords)
 			// Compute statistics
-			fileNameAdded = true
+			docNameAdded = true
 		}
-		//fmt.Println(index.reverseIndex)		
 	}
-	if fileNameAdded {
+	if docNameAdded {
 		index.stat.numDocs++
 	}
-	//fmt.Println(index.reverseIndex)	
 }
 
 func (index *Index) computeStats() {
@@ -341,22 +344,16 @@ func GetNextWord(data []byte, count, index int) (string, int) {
 
 	for _, c := range data[index:count] {
 		index++
-		//fmt.Println("word: ", word)
-		//fmt.Println("index: ", index)
-		//fmt.Println("c: ", c)
 
 		// Any new line or space
 		if (8 <= c && c <= 10) || (32 <= c && c <= 47) || (58 <= c && c <= 64) {
-			//fmt.Println("Exit at IF statement")			
 			return word, index
 
 			// A word starts or continues
 		} else {
 			word = word + string(c)
-			//fmt.Println("\nNo exit at ELSE statement")					
 		}
 	}
-	//fmt.Println("Exit at FOR loop")	
 	return word, index
 }
 
