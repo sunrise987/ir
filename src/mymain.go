@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"strconv"
 
 	. "precrecal"
 	. "reverseindex"
@@ -30,6 +31,8 @@ var orFlag *bool = flag.Bool("or", false, "Embed 'or' within each query.")
 var numResults *int = flag.Int("numResults", 10, "Print top ranked numResults.")
 var dataDirectoryName *string = flag.String("dataDirectoryName", "data/", "Data directory Name")
 
+// Search results with scores below this value will be cut (deleted)
+var cutValue int = 0
 
 /**/
 func main() {
@@ -58,14 +61,14 @@ func RunMakeReverseIndex(corpus_pattern, stopwords_filename string) *Index {
 
 	for _, fileName := range fileNames {
 		count, data := ReadFile(fileName)
-		queryNum := getQueryNumberFromFileName(fileName)
-		index.MakeReverseIndex(count, data, queryNum)
+		docName := getDocNameFromFileName(fileName)
+		index.MakeReverseIndex(count, data, docName)
 	}
 	index.PrintStatistics()
 	return index
 }
 
-func getQueryNumberFromFileName(fileName string) string {
+func getDocNameFromFileName(fileName string) string {
 	fileName = path.Base(fileName)
 	queryNum := fileName[3 : len(fileName)-4]
 	return queryNum
@@ -106,78 +109,90 @@ func runOnline_receivesQueryText(index *Index) {
 
 func runOffline_receivesFolder(index *Index, queryfiles_pattern string) {
 	query_files, err := filepath.Glob(queryfiles_pattern)
-	if err != nil {
-		log.Fatal(err)
-	}
+	if err != nil { log.Fatal(err) }
 	fmt.Sprintf("%d queries to process.\n", len(query_files))
-	
-	var queryNum string
-	cutValue := 1                // To delete scores below 1
+	var queryName string
 	tokens := make([]string, 50) // TODO: fix this: assuming max query size 50 
 	retrievedLists := make(map[string]PairList, len(query_files))
 	
 	for _, queryFileName := range query_files {
-		tokens = getTokensFromFile(queryFileName)
+		tokens = getWordsFromQueryFile(queryFileName)
 		tokens = joinTokensWithOp(tokens)
 		docList := index.SearchQuery(tokens)
 		pairlist := SortMapByValue(docList, cutValue, *numResults)
 		
 		// Add resluts to map. This map will be sent to precrecal.go 
 		// to create a Precision-Recall Graph.
-		queryNum = getQueryNumberFromQueryFileName(queryFileName)
-		retrievedLists[queryNum] = pairlist
+		queryName = getQueryNumberFromQueryFileName(queryFileName)
+		retrievedLists[queryName] = pairlist
 
 		// Print top search results:
 		fmt.Println()
 		fmt.Println(queryFileName)
 		fmt.Printf("Number of matches: %d\n", len(docList))
 		fmt.Printf("DocName\tScore\n")
-		fmt.Printf(pairlist.PrintToString())
+		pairlist.Print()
 	}
 	fmt.Printf("\n\n\nMaking Precision-Recall Graph...\n\n")
-
 	// Make Interpolated Precision-Recall Graph
 	prgraph := NewPRGraph()
 	prgraph.MakeAvgInterpolatedPRTable(retrievedLists)
 }
 
 func runOffline_receivesFile(index *Index, queryFileName string) {
-	// Get Query.
-	tokens := getTokensFromFile(queryFileName)
+	// Get query.
+	tokens := getWordsFromQueryFile(queryFileName)
 	tokens = joinTokensWithOp(tokens)
 
-	// Get Query Results.
+	// Get query results and rank them.
 	docList := index.SearchQuery(tokens)
-
-	// Rank Results.
-	cutValue := 1 // To delete scores below 1.
 	pairlist := SortMapByValue(docList, cutValue, *numResults)
 	
 	// Print top search results:
 	fmt.Println(queryFileName)
 	fmt.Printf("Number of matches: %d\n", len(docList))
-	fmt.Printf("DocName\tScore\n")
-	fmt.Printf(pairlist.PrintToString())
+	pairlist.Print()
 	fmt.Println()
 
 	// Make Interpolated Precision-Recall Graph
-	queryNum := getQueryNumberFromQueryFileName(queryFileName)
+	queryName := getQueryNumberFromQueryFileName(queryFileName)
 	prgraph := NewPRGraph()
-	prgraph.MakeOneInterpolatedPRTable(pairlist, queryNum)
+	prgraph.MakeOneInterpolatedPRTable(pairlist, queryName)
 }
 
-func getTokensFromFile(fileName string) []string {
-	_, data := ReadFile(fileName)
-	lowcaseline := strings.ToLower(string(data))
-	tokens := strings.Split(lowcaseline, " ")
-
-	return tokens
+/* Returns Query Words, out of order and without repetitions. */
+func getWordsFromQueryFile(file string) []string {
+	tokenMap := make(map[string]bool)
+	_, data := ReadFile(file)
+	lowcaseData := strings.ToLower(string(data))
+	lines := strings.Split(string(lowcaseData), "\n")
+	for _, line := range lines {
+		tokens := strings.Split(line, " ")
+		if tokens != nil {
+			for i := 0; i < len(tokens); i++ {
+				if tokens[i] != "" && tokens[i] != "." {
+					//To handle the null-charachter case
+					v, _, _, _ := strconv.UnquoteChar(tokens[i], 0)
+					if v != 0 {
+						tokenMap[tokens[i]] = true
+					}
+				}
+			}
+		}
+	}
+	returnArray := make([]string, len(tokenMap))
+	index := 0
+	for word := range tokenMap {
+		returnArray[index] = word
+		index++
+	}
+	return returnArray
 }
 
 // XXX: A simpler way of doing the same thing is to use strings.Join
 // and then strings.Split again.
 func joinTokensWithOp(tokens []string) []string {
-	op := "and"
+	op := "or"
 	if *andFlag {
 		op = "and"
 	} else if *orFlag {
