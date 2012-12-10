@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 )
+
+var numBins int = 11
+
 type SearchResults map[string]bool
 type PRGraph struct {
 	TestQueries map[string]SearchResults
@@ -24,14 +27,14 @@ func (prGraph *PRGraph) init(fileName string) {
 }
 
 func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sortmap.PairList) []float64 {
-	numBins := 11
 	avgIntrplPRTable := make([]float64, numBins)
 	sampleSize := len(prGraph.TestQueries)
 	
 	for sample := range prGraph.TestQueries {
 		fmt.Printf("\nQueryNumber: %s\n", sample)
 		precision, recall, size := makePrecRecallTable(retrievedLists[sample], prGraph.TestQueries[sample])
-		intrplPRTable := makeInterpolatedPRTable(precision, recall, size, numBins)
+		if size == 0 { continue }
+		intrplPRTable := makeInterpolatedPRTable(precision, recall, size)
 		for i := 0; i < numBins; i++ {
 			avgIntrplPRTable[i] += intrplPRTable[i] / float64(sampleSize)
 		}
@@ -45,13 +48,15 @@ func (prGraph *PRGraph) MakeAvgInterpolatedPRTable(retrievedLists map[string]sor
 }
 
 func (prGraph *PRGraph) MakeOneInterpolatedPRTable(retrievedList sortmap.PairList, queryNum string) {
-	numBins := 11
 	fmt.Printf("\nQueryNumber: %s\n", queryNum)
 	precision, recall, size := makePrecRecallTable(retrievedList, prGraph.TestQueries[queryNum])
-	makeInterpolatedPRTable(precision, recall, size, numBins)
+	makeInterpolatedPRTable(precision, recall, size)
 }
 
 func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]bool) ([]float64, []float64, int) {
+	if len(retrievedList) == 0 {
+		return nil, nil, 0
+	}
 	totalExpected := float64(len(testData))
 	precision := make([]float64, len(retrievedList))
 	recall := make([]float64, len(retrievedList))
@@ -63,6 +68,7 @@ func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]boo
 
 		// No need to continue because all correct results were already	displayed.
 		if len(testData) == 0 {
+			num--
 			break
 		}
 
@@ -76,16 +82,20 @@ func makePrecRecallTable(retrievedList sortmap.PairList, testData map[string]boo
 		precision[num] = correctCount / float64(num+1) // num retrieved sofar.
 		fmt.Printf("%s\t%.2f\t%.2f\n", pair.Key, recall[num], precision[num])
 	}
-	return precision, recall, num
+	size := num + 1
+	return precision, recall, size
 }
 
-func makeInterpolatedPRTable(precision, recall []float64, numRetrievals int, numBins int) []float64 {
-
+func makeInterpolatedPRTable(precision, recall []float64, numRetrievals int) []float64 {
 	interpolatedPR := make([]float64, numBins)
+	if numRetrievals == 0 { return nil }
+	if numRetrievals != len(precision) && numRetrievals != len(recall) {
+		fmt.Printf("Error: numRetrievals: %v, precisionlen: %v, recallen: %v\n", 
+			numRetrievals, len(precision), len(recall))
+	}
 	periods := make([]float64, numBins)
 	currentRecall := 0.0
 	maxPrecision := 0.0
-
 	fmt.Printf("num retrievals: %d\n", numRetrievals)
 	for num := 0; num < numRetrievals; num++ {
 		// Find max precision for this period.
